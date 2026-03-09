@@ -56,6 +56,15 @@ export const VOICE_GROUPS: VoiceGroup[] = [
     ],
   },
   {
+    label: '🌍 English TTS 2.0',
+    voices: [
+      { id: 'en_male_tim_uranus_bigtts', name: 'Tim（英文男声）' },
+      { id: 'en_female_dacey_uranus_bigtts', name: 'Dacey（英文女声）' },
+      { id: 'en_female_stokie_uranus_bigtts', name: 'Stokie（英文女声）' },
+      { id: 'zh_female_mizai_saturn_bigtts', name: '米仔（中文女声）' },
+    ],
+  },
+  {
     label: '🎩 精品男声',
     voices: [
       { id: 'BV705_streaming', name: '炀炀（自然对话）' },

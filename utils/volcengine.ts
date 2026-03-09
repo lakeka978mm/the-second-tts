@@ -1,73 +1,106 @@
 import { VolcVoiceName, DoubaoCredentials } from "../types";
 
-const V3_ENDPOINT = "https://open.volcengineapi.com/api/v3/tts/unidirectional";
+// 本地开发通过 Vite 代理到火山接口，避免浏览器直接跨域请求
+// 见 vite.config.ts 中 /doubao-tts 的代理配置
+const V3_ENDPOINT = "/doubao-tts";
 
 /**
- * Build the standard V3 request headers.
+ * 构造 Doubao V3 HTTP Chunked 请求头
+ * 这里统一走 2.0 资源，以避免 1.0 资源未开通导致的 403。
  */
 function buildHeaders(credentials: DoubaoCredentials): Record<string, string> {
-  // Doubao V3 TTS requires both App ID and Token
-  // Note: Standard Volcengine Bearer format requires a semicolon after Bearer.
   return {
     "Content-Type": "application/json",
     "X-Api-App-Id": credentials.appId,
-    "Authorization": `Bearer;${credentials.apiKey}`,
-    "X-Api-Resource-Id": "volc.service_type.10029",
+    "X-Api-Access-Key": credentials.apiKey,
+    "X-Api-Resource-Id": "seed-tts-2.0",
   };
 }
 
 /**
- * Build the request payload for Volcengine / Doubao TTS V3.
+ * 构造 Doubao V3 HTTP Chunked 请求 Body
+ * 对齐官方文档结构：
+ * {
+ *   "user": { "uid": "xxx" },
+ *   "req_params": {
+ *      "text": "...",
+ *      "speaker": "BVxxx",
+ *      "audio_params": { "format": "mp3", "sample_rate": 24000 }
+ *   }
+ * }
  */
-function buildPayload(text: string, voice: VolcVoiceName, credentials: DoubaoCredentials, speedRatio: number = 1.0) {
+function buildPayload(
+  text: string,
+  voice: VolcVoiceName,
+  _credentials: DoubaoCredentials,
+  _speedRatio: number = 1.0
+) {
   return {
-    app: {
-      appid: credentials.appId,
-      token: "access_token",
-      cluster: "volcano_tts",
-    },
     user: {
       uid: "user_dafei_tts",
     },
-    audio: {
-      voice_type: voice,
-      encoding: "mp3",
-      speed_ratio: speedRatio,
-      volume_ratio: 1.0,
-      pitch_ratio: 1.0,
-    },
-    request: {
-      reqid: crypto.randomUUID(),
-      text: text,
-      text_type: "plain",
-      operation: "query",
+    req_params: {
+      text,
+      // 使用前端选择的音色 ID（需确保是你账号有权限的 2.0 / bigtts 音色）
+      speaker: voice,
+      audio_params: {
+        format: "mp3",
+        sample_rate: 24000,
+      },
     },
   };
 }
 
 /**
- * Read a chunked/streaming HTTP response and return the full body as a Uint8Array.
+ * 解析 Doubao 返回的文本（可能包含多行 JSON），提取所有 data 字段里的 base64 音频。
+ * 这样不用真正“流式”读取，简化调试，也兼容 HTTP Chunked / SSE 文本模式。
  */
-async function readStreamToArrayBuffer(response: Response): Promise<Uint8Array> {
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error("Failed to get response body reader");
+function parseDoubaoTextStream(rawText: string): Uint8Array {
+  const audioChunks: Uint8Array[] = [];
+
+  const lines = rawText.split(/\r?\n/);
+  for (const lineRaw of lines) {
+    const line = lineRaw.trim();
+    if (!line) continue;
+
+    const jsonText = line.startsWith("data:")
+      ? line.slice("data:".length).trim()
+      : line;
+
+    try {
+      const obj = JSON.parse(jsonText) as {
+        code?: number;
+        message?: string;
+        data?: string | null;
+      };
+
+      if (obj.code && obj.code !== 0 && obj.code !== 20000000) {
+        throw new Error(obj.message || `Doubao error code: ${obj.code}`);
+      }
+
+      if (obj.data) {
+        const base64 = obj.data;
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i += 1) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        audioChunks.push(bytes);
+      }
+    } catch {
+      // 不是 JSON 行，忽略即可
+      continue;
+    }
   }
 
-  const chunks: Uint8Array[] = [];
+  // 合并所有音频片段
   let totalLength = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    totalLength += value.length;
+  for (const chunk of audioChunks) {
+    totalLength += chunk.length;
   }
-
-  // Merge all chunks into a single Uint8Array
   const result = new Uint8Array(totalLength);
   let offset = 0;
-  for (const chunk of chunks) {
+  for (const chunk of audioChunks) {
     result.set(chunk, offset);
     offset += chunk.length;
   }
@@ -85,8 +118,8 @@ export const generateVolcAudioV3 = async (
   credentials: DoubaoCredentials,
   speedRatio: number = 1.0
 ): Promise<Blob> => {
-  if (!credentials.apiKey) {
-    throw new Error("Missing Doubao API Key. Please configure your API Key in settings.");
+  if (!credentials.apiKey || !credentials.appId) {
+    throw new Error("Missing Doubao App ID or API Key. Please configure them in settings.");
   }
 
   const payload = buildPayload(text, voice, credentials, speedRatio);
@@ -103,30 +136,12 @@ export const generateVolcAudioV3 = async (
     throw new Error(`Doubao API Error: ${response.status} - ${errText}`);
   }
 
-  // Check content type to determine response format
-  const contentType = response.headers.get("content-type") || "";
-
-  if (contentType.includes("application/json")) {
-    // V3 may return JSON with base64 data (fallback/error case or non-streaming response)
-    const data = await response.json();
-    if (data.code && data.code !== 3000) {
-      throw new Error(`Doubao Error: ${data.message || "Unknown error"}`);
-    }
-    if (data.data) {
-      // base64 encoded audio
-      const binaryString = atob(data.data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      return new Blob([bytes], { type: "audio/mp3" });
-    }
-    throw new Error("No audio data received from Doubao API.");
-  }
-
-  // Chunked binary audio response
-  const audioData = await readStreamToArrayBuffer(response);
+  // 拉取完整文本，再按行解析 JSON（data 字段为 base64 音频）
+  const rawText = await response.text();
+  const audioData = parseDoubaoTextStream(rawText);
   if (audioData.length === 0) {
+    // 为了方便排查问题，把前 200 字符打印到控制台
+    console.error("Doubao raw response (no audio data):", rawText.slice(0, 200));
     throw new Error("Empty audio data received from Doubao API.");
   }
 

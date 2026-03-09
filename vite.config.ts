@@ -9,6 +9,15 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        proxy: {
+          // 本地开发时，将浏览器请求代理到火山 Doubao TTS V3 接口，避免跨域 / CORS 问题
+          '/doubao-tts': {
+            target: 'https://openspeech.bytedance.com',
+            changeOrigin: true,
+            secure: true,
+            rewrite: (p) => p.replace(/^\/doubao-tts/, '/api/v3/tts/unidirectional'),
+          },
+        },
       },
       plugins: [react()],
       define: {
