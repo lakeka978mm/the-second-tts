@@ -19,6 +19,9 @@ const DEMO_TEXT = `To secure a future in Australia, mastering IT operations is c
 
 Web development creates opportunities to build tools that solve real problems. By combining technical skills with persistence, you can achieve your migration goals. Remember, every line of code written is a step closer to your dream.`;
 
+const DOUBAO_APP_ID_KEY = 'volcengineAppId';
+const DOUBAO_API_KEY_KEY = 'doubaoApiKey';
+
 const App: React.FC = () => {
   const [rawText, setRawText] = useState(DEMO_TEXT);
   const [isEditing, setIsEditing] = useState(false);
@@ -40,13 +43,16 @@ const App: React.FC = () => {
 
   // Credential Management — simplified to just API Key
   const [isApiSettingsOpen, setIsApiSettingsOpen] = useState(false);
-  const [credentials, setCredentials] = useState<DoubaoCredentials>({
-    apiKey: typeof window !== 'undefined' ? localStorage.getItem('DOUBAO_API_KEY') || '' : '',
+  const [credentials, setCredentials] = useState<DoubaoCredentials>(() => {
+    const savedAppId = typeof window !== 'undefined' ? localStorage.getItem(DOUBAO_APP_ID_KEY) || '' : '';
+    const savedKey = typeof window !== 'undefined' ? localStorage.getItem(DOUBAO_API_KEY_KEY) || '' : '';
+    return { appId: savedAppId, apiKey: savedKey };
   });
 
-  const handleSaveCredentials = (apiKey: string) => {
-    setCredentials({ apiKey });
-    localStorage.setItem('DOUBAO_API_KEY', apiKey);
+  const handleSaveCredentials = (appId: string, apiKey: string) => {
+    setCredentials({ appId, apiKey });
+    localStorage.setItem(DOUBAO_APP_ID_KEY, appId);
+    localStorage.setItem(DOUBAO_API_KEY_KEY, apiKey);
     setIsApiSettingsOpen(false);
   };
 
@@ -73,7 +79,7 @@ const App: React.FC = () => {
 
   const handlePlaybackError = useCallback((msg: string) => {
       setAutoPlay(false); // Stop loop on error
-      if (msg.includes("Missing Doubao API Key")) {
+      if (msg.includes("Missing Doubao API Key") || msg.includes("Missing Doubao App ID")) {
           setIsApiSettingsOpen(true);
       } else {
           alert("Playback Error: " + msg);
@@ -131,7 +137,7 @@ const App: React.FC = () => {
   const handleDownload = async () => {
     if (isDownloading) return;
     
-    if (!credentials.apiKey) {
+    if (!credentials.apiKey || !credentials.appId) {
         setIsApiSettingsOpen(true);
         return;
     }
@@ -209,6 +215,7 @@ const App: React.FC = () => {
         isOpen={isApiSettingsOpen}
         onClose={() => setIsApiSettingsOpen(false)}
         onSave={handleSaveCredentials}
+        initialAppId={credentials.appId}
         initialApiKey={credentials.apiKey}
       />
     </div>

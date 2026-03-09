@@ -35,6 +35,7 @@ export interface VoiceGroup {
 
 // Doubao V3 API Credentials — only API Key needed
 export interface DoubaoCredentials {
+  appId: string;
   apiKey: string;
 }
 

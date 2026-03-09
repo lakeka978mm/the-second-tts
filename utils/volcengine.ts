@@ -6,8 +6,10 @@ const V3_ENDPOINT = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
  * Build the standard V3 request headers.
  */
 function buildHeaders(credentials: DoubaoCredentials): Record<string, string> {
+  // Doubao V3 TTS requires both App ID and Token
   return {
     "Content-Type": "application/json",
+    "X-Api-App-Key": credentials.appId,
     "X-Api-Access-Key": credentials.apiKey,
     "X-Api-Resource-Id": "volc.service_type.10029",
   };
@@ -127,7 +129,7 @@ export const generateVolcAudioV3 = async (
     throw new Error("Empty audio data received from Doubao API.");
   }
 
-  return new Blob([audioData], { type: "audio/mp3" });
+  return new Blob([audioData as any], { type: "audio/mp3" });
 };
 
 // Legacy V1 function kept for reference but deprecated
