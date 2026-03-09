@@ -1,0 +1,5 @@
+{
+  "name": "DaFei TTS - Minimalist Text to Speech",
+  "description": "A minimalist, high-performance Text-to-Speech application featuring sentence-level seeking, word-level highlighting, and customizable voice settings using the Web Speech API.",
+  "requestFramePermissions": []
+}
