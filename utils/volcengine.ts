@@ -1,6 +1,6 @@
 import { VolcVoiceName, DoubaoCredentials } from "../types";
 
-const V3_ENDPOINT = "https://openspeech.bytedance.com/api/v3/tts/unidirectional";
+const V3_ENDPOINT = "https://open.volcengineapi.com/api/v3/tts/unidirectional";
 
 /**
  * Build the standard V3 request headers.
@@ -19,10 +19,10 @@ function buildHeaders(credentials: DoubaoCredentials): Record<string, string> {
 /**
  * Build the request payload for Volcengine / Doubao TTS V3.
  */
-function buildPayload(text: string, voice: VolcVoiceName, speedRatio: number = 1.0) {
+function buildPayload(text: string, voice: VolcVoiceName, credentials: DoubaoCredentials, speedRatio: number = 1.0) {
   return {
     app: {
-      appid: "dafei-tts",
+      appid: credentials.appId,
       token: "access_token",
       cluster: "volcano_tts",
     },
@@ -89,7 +89,7 @@ export const generateVolcAudioV3 = async (
     throw new Error("Missing Doubao API Key. Please configure your API Key in settings.");
   }
 
-  const payload = buildPayload(text, voice, speedRatio);
+  const payload = buildPayload(text, voice, credentials, speedRatio);
   const headers = buildHeaders(credentials);
 
   const response = await fetch(V3_ENDPOINT, {
