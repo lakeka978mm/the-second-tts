@@ -7,10 +7,11 @@ const V3_ENDPOINT = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
  */
 function buildHeaders(credentials: DoubaoCredentials): Record<string, string> {
   // Doubao V3 TTS requires both App ID and Token
+  // Note: Standard Volcengine Bearer format requires a semicolon after Bearer.
   return {
     "Content-Type": "application/json",
-    "X-Api-App-Key": credentials.appId,
-    "X-Api-Access-Key": credentials.apiKey,
+    "X-Api-App-Id": credentials.appId,
+    "Authorization": `Bearer;${credentials.apiKey}`,
     "X-Api-Resource-Id": "volc.service_type.10029",
   };
 }
